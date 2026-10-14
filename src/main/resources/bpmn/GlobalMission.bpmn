@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Def_Collaboration"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:message id="Msg_weedPosition" name="weedPosition" />
+  <bpmn:message id="Msg_availability" name="availability" />
+  <bpmn:message id="Msg_closestTractor" name="closestTractor" />
+  <bpmn:message id="Msg_fieldReady" name="fieldReady" />
+  <bpmn:message id="Msg_digDone" name="digDone" />
+  <bpmn:message id="Msg_seedingDone" name="seedingDone" />
+
+  <bpmn:collaboration id="Collaboration_Globale">
+    <bpmn:participant id="Part_Drone" name="Drone" />
+    <bpmn:participant id="Part_Tagliatore" name="Tagliatore" />
+    <bpmn:participant id="Part_Scavatore" name="Scavatore" />
+    <bpmn:participant id="Part_Seminatore" name="Seminatore" />
+    <bpmn:participant id="Part_Broadcast" name="Broadcast" />
+
+    <bpmn:messageFlow id="MessageFlow_weedPosition" sourceRef="Part_Drone" targetRef="Part_Tagliatore" messageRef="Msg_weedPosition" />
+    <bpmn:messageFlow id="MessageFlow_availability" sourceRef="Part_Tagliatore" targetRef="Part_Drone" messageRef="Msg_availability" />
+    <bpmn:messageFlow id="MessageFlow_closestTractor" sourceRef="Part_Drone" targetRef="Part_Tagliatore" messageRef="Msg_closestTractor" />
+    <bpmn:messageFlow id="MessageFlow_fieldReady" sourceRef="Part_Tagliatore" targetRef="Part_Scavatore" messageRef="Msg_fieldReady" />
+    <bpmn:messageFlow id="MessageFlow_digDone" sourceRef="Part_Scavatore" targetRef="Part_Seminatore" messageRef="Msg_digDone" />
+    <bpmn:messageFlow id="MessageFlow_seedingDone" sourceRef="Part_Seminatore" targetRef="Part_Broadcast" messageRef="Msg_seedingDone" />
+  </bpmn:collaboration>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_Globale">
+      
+      <bpmndi:BPMNShape id="Participant_Drone_di" bpmnElement="Part_Drone" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="600" height="60" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Participant_Tagliatore_di" bpmnElement="Part_Tagliatore" isHorizontal="true">
+        <dc:Bounds x="160" y="220" width="600" height="60" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Participant_Scavatore_di" bpmnElement="Part_Scavatore" isHorizontal="true">
+        <dc:Bounds x="160" y="360" width="600" height="60" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Participant_Seminatore_di" bpmnElement="Part_Seminatore" isHorizontal="true">
+        <dc:Bounds x="160" y="500" width="600" height="60" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Participant_Broadcast_di" bpmnElement="Part_Broadcast" isHorizontal="true">
+        <dc:Bounds x="160" y="640" width="600" height="60" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="Flow_weed_di" bpmnElement="MessageFlow_weedPosition">
+        <di:waypoint x="250" y="140" />
+        <di:waypoint x="250" y="220" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_avail_di" bpmnElement="MessageFlow_availability">
+        <di:waypoint x="350" y="220" />
+        <di:waypoint x="350" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_tractor_di" bpmnElement="MessageFlow_closestTractor">
+        <di:waypoint x="450" y="140" />
+        <di:waypoint x="450" y="220" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ready_di" bpmnElement="MessageFlow_fieldReady">
+        <di:waypoint x="350" y="280" />
+        <di:waypoint x="350" y="360" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_dig_di" bpmnElement="MessageFlow_digDone">
+        <di:waypoint x="350" y="420" />
+        <di:waypoint x="350" y="500" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_seed_di" bpmnElement="MessageFlow_seedingDone">
+        <di:waypoint x="350" y="560" />
+        <di:waypoint x="350" y="640" />
+      </bpmndi:BPMNEdge>
+      
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

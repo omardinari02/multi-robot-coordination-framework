@@ -1,0 +1,4 @@
+{
+  "Coordinate": ["weedPosition", "closestTractor", "MapData"],
+  "Boolean": ["availability", "fieldReady", "digDone", "seedingDone"]
+}
