@@ -61,5 +61,8 @@ public class MissionSynthesisEngine {
 
         repository.saveUnifiedDiagram(context);
         logger.info("=== [Engine] Pipeline finished successfully. Check the output folder. ===");
+
+        it.univaq.disim.mrs.synthesis.generator.DrawioExporter exporter = new it.univaq.disim.mrs.synthesis.generator.DrawioExporter();
+        exporter.exportAllToDrawio(context, "target/output/");
     }
 }

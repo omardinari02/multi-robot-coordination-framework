@@ -32,28 +32,47 @@ public class UnifiedDiagramBuilder {
         Map<String, Participant> pools = new HashMap<>();
         double currentY = 100;
         
-        for (Participant p : context.getGlobalChoreography().getModelElementsByType(Participant.class)) {
-            Participant pool = modelInstance.newInstance(Participant.class);
-            pool.setName(p.getName());
-            pool.setId("Pool_" + p.getName());
-            collaboration.addChildElement(pool);
-            pools.put(p.getName(), pool);
+        // 1. Creazione dei Processi vuoti e dei Pool (Black-box)
+        for (Map.Entry<String, BpmnModelInstance> entry : context.getAllRobotModels().entrySet()) {
+            String robotKey = entry.getKey().replace(".bpmn", "").replace("_enhanced", "");
             
-            BpmndiGenerator.createShape(modelInstance, plane, pool, 100, currentY, 600, 150);
+            // Crea il processo
+            org.camunda.bpm.model.bpmn.instance.Process unifiedProcess = modelInstance.newInstance(org.camunda.bpm.model.bpmn.instance.Process.class);
+            unifiedProcess.setId("Process_" + robotKey);
+            unifiedProcess.setExecutable(true);
+            definitions.addChildElement(unifiedProcess);
+            
+            // Crea il Participant (Pool) collegato al Processo
+            Participant pool = modelInstance.newInstance(Participant.class);
+            pool.setName(robotKey);
+            pool.setId("Pool_" + robotKey);
+            pool.setProcess(unifiedProcess); 
+            collaboration.addChildElement(pool);
+            pools.put(robotKey.toLowerCase(), pool);
+            
+            BpmndiGenerator.createShape(modelInstance, plane, pool, 100, currentY, 800, 150);
             currentY += 200;
         }
         
+        // 2. Creazione dei MessageFlow tra i Pool con il NOME DEL MESSAGGIO
         for (InteractionMatch match : context.getValidatedMatches()) {
-            String senderKey = match.getSenderRobot().replace(".bpmn", "");
-            Participant source = pools.get(senderKey);
-            Participant target = pools.get(match.getReceiverRobot());
+            String senderRobot = match.getSenderRobot().replace(".bpmn", "").replace("_enhanced", "").toLowerCase();
+            String receiverRobot = match.getReceiverRobot().replace(".bpmn", "").replace("_enhanced", "").toLowerCase();
             
-            if (source != null && target != null) {
+            Participant sourcePool = pools.get(senderRobot);
+            Participant targetPool = pools.get(receiverRobot);
+            
+            if (sourcePool != null && targetPool != null) {
                 MessageFlow msgFlow = modelInstance.newInstance(MessageFlow.class);
-                // FIXED: Using UUID instead of currentTimeMillis to prevent ID collisions
                 msgFlow.setId("Flow_" + java.util.UUID.randomUUID().toString().replace("-", ""));
-                msgFlow.setSource(source);
-                msgFlow.setTarget(target);
+                
+                // Colleghiamo i Pool tra loro
+                msgFlow.setSource(sourcePool);
+                msgFlow.setTarget(targetPool);
+                
+                // AGGIUNTA FONDAMENTALE: Impostiamo il nome del messaggio sulla freccia
+                msgFlow.setName(match.getMessageName());
+                
                 collaboration.addChildElement(msgFlow);
             }
         }

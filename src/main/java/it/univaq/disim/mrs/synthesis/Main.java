@@ -13,7 +13,6 @@ public class Main {
     public static void main(String[] args) {
         MissionSynthesisEngine engine = new MissionSynthesisEngine();
         
-        // NUOVI PERCORSI: Ontologia in resources, BPMN in resources/bpmn/
         File ontology = new File("src/main/resources/taxonomy.json");
         File bpmnDir = new File("src/main/resources/bpmn/");
         
@@ -29,7 +28,6 @@ public class Main {
         if (files != null) {
             for (File file : files) {
                 String name = file.getName();
-                
                 if (name.toLowerCase().contains("global") && name.endsWith(".bpmn")) {
                     global = file;
                 } else if (name.endsWith(".bpmn") && !name.contains("enhanced") && !name.contains("Unified")) {

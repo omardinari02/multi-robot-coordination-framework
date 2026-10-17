@@ -2,7 +2,6 @@ package it.univaq.disim.mrs.synthesis.core;
 
 import org.camunda.bpm.model.bpmn.BpmnModelInstance;
 import org.camunda.bpm.model.bpmn.instance.*;
-import org.camunda.bpm.model.bpmn.instance.bpmndi.BpmnDiagram;
 import org.camunda.bpm.model.bpmn.instance.bpmndi.BpmnPlane;
 import org.camunda.bpm.model.bpmn.instance.bpmndi.BpmnShape;
 import it.univaq.disim.mrs.synthesis.model.*;
@@ -13,170 +12,207 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 
 public class Step3BpmEnhancer {
-    // ADDED: Initialize SLF4J Logger
+
     private static final Logger logger = LoggerFactory.getLogger(Step3BpmEnhancer.class);
 
     public void generateEnhancedModels(MissionContext context) {
-        logger.info("--- [Step 3] Starting task injection (Enhancer) ---");
-
-        Map<String, List<InteractionMatch>> taskOutputs = new HashMap<>();
-        context.getValidatedMatches().forEach(m -> 
-            taskOutputs.computeIfAbsent(m.getSenderTaskId(), k -> new ArrayList<>()).add(m));
-
-        taskOutputs.forEach((taskId, matches) -> {
-            String robotName = matches.get(0).getSenderRobot();
-            BpmnModelInstance model = getRobotModel(context, robotName);
-
-            if (model != null) {
-                BpmnPlane plane = ensureDIInitialized(model);
-                if (matches.size() > 1) {
-                    logger.info(" [Enhancer] Injecting Parallel Gateway for task: {} in robot: {}", taskId, robotName);
-                    injectParallelGateway(model, plane, taskId, matches);
-                } else {
-                    logger.info(" [Enhancer] Injecting SendTask for: {} after {}", matches.get(0).getMessageName(), taskId);
-                    injectSingleTask(model, plane, taskId, matches.get(0).getMessageName(), true);
-                }
-            } else {
-                logger.error(" [Error] BPMN Model not found for sender: {}", robotName);
-            }
-        });
-
+        logger.info("--- [Step 3] 100% Pure Dynamic Top-Down Choreography Weaving ---");
+        
+        Map<String, List<InteractionMatch>> robotMatches = new HashMap<>();
         for (InteractionMatch m : context.getValidatedMatches()) {
-            String robotName = m.getReceiverRobot();
-            BpmnModelInstance model = getRobotModel(context, robotName);
+            String sender = cleanName(m.getSenderRobot());
+            String receiver = cleanName(m.getReceiverRobot());
+            robotMatches.computeIfAbsent(sender, k -> new ArrayList<>()).add(m);
+            robotMatches.computeIfAbsent(receiver, k -> new ArrayList<>()).add(m);
+        }
 
-            if (model != null) {
-                logger.info(" [Enhancer] Injecting ReceiveTask for: {} before {}", m.getMessageName(), m.getReceiverTaskId());
-                BpmnPlane plane = ensureDIInitialized(model);
-                injectSingleTask(model, plane, m.getReceiverTaskId(), m.getMessageName(), false);
-            } else {
-                logger.error(" [Error] BPMN Model not found for receiver: {}", robotName);
+        for (String robotKey : context.getAllRobotModels().keySet()) {
+            String rName = cleanName(robotKey);
+            BpmnModelInstance localModel = context.getAllRobotModels().get(robotKey);
+            
+            if (localModel != null && robotMatches.containsKey(rName)) {
+                logger.info("Weaving dynamic choreography for robot: {}", rName);
+                BpmnPlane plane = ensureDIInitialized(localModel);
+                weaveDynamicFlow(context.getGlobalChoreography(), localModel, plane, rName, robotMatches.get(rName));
             }
         }
         logger.info("------------------------------------------------");
     }
 
-    private BpmnModelInstance getRobotModel(MissionContext context, String robotName) {
-        Map<String, BpmnModelInstance> models = context.getAllRobotModels();
-        if (models.containsKey(robotName)) return models.get(robotName);
-        if (models.containsKey(robotName + ".bpmn")) return models.get(robotName + ".bpmn");
+    private void weaveDynamicFlow(BpmnModelInstance global, BpmnModelInstance local, BpmnPlane plane, String robotName, List<InteractionMatch> matches) {
+        ServiceTask anchor = null;
+        for (InteractionMatch m : matches) {
+            if (cleanName(m.getSenderRobot()).equalsIgnoreCase(robotName)) {
+                anchor = local.getModelElementById(m.getSenderTaskId());
+                break;
+            }
+        }
+        if (anchor == null) {
+            anchor = local.getModelElementById(matches.get(0).getReceiverTaskId());
+        }
+        if (anchor == null) return;
 
-        String cleanName = robotName.replace("Part_", "");
-        if (models.containsKey(cleanName)) return models.get(cleanName);
-        if (models.containsKey(cleanName + ".bpmn")) return models.get(cleanName + ".bpmn");
+        double currentX = getX(local, anchor) + 150;
+        double currentY = getY(local, anchor);
+        
+        SequenceFlow oldOut = anchor.getOutgoing().isEmpty() ? null : anchor.getOutgoing().iterator().next();
+        FlowNode nextLocal = null;
+        if (oldOut != null) {
+            nextLocal = oldOut.getTarget();
+            anchor.getParentElement().removeChildElement(oldOut);
+        }
 
-        for (String key : models.keySet()) {
-            if (key.toLowerCase().contains(cleanName.toLowerCase())) return models.get(key);
+        org.camunda.bpm.model.bpmn.instance.Process globalProcess = global.getModelElementById("Global_Choreography_Process");
+        if (globalProcess == null) return;
+
+        Map<String, FlowNode> injectedNodes = new LinkedHashMap<>();
+
+        for (FlowElement element : globalProcess.getFlowElements()) {
+            if (element instanceof Task) {
+                Task globalTask = (Task) element;
+                
+                // NO HARDCODING: Dynamic Semantic Matching based on Task ID and Ontology Matches
+                InteractionMatch match = findMatchForGlobalTask(globalTask, matches);
+                
+                if (match != null) {
+                    // Automatically determine if the current robot is the sender or receiver
+                    boolean isSender = cleanName(match.getSenderRobot()).equalsIgnoreCase(robotName);
+                    String cleanMsg = match.getMessageName();
+                    
+                    Task localTask;
+                    if (isSender) {
+                        localTask = createTask(local, SendTask.class, "Invia: " + cleanMsg);
+                    } else {
+                        localTask = createTask(local, ReceiveTask.class, "Ricevi: " + cleanMsg);
+                    }
+                    
+                    BpmndiGenerator.createShape(local, plane, localTask, currentX, currentY, 100, 80);
+                    injectedNodes.put(element.getId(), localTask);
+                    currentX += 150;
+                }
+            } else if ((element instanceof Gateway || element instanceof IntermediateCatchEvent) && isComplexChoreography(matches)) {
+                FlowNode logicNode;
+                if (element instanceof ParallelGateway) {
+                    logicNode = createGateway(local, ParallelGateway.class, element.getName());
+                } else if (element instanceof ExclusiveGateway) {
+                    logicNode = createGateway(local, ExclusiveGateway.class, element.getName());
+                } else {
+                    logicNode = createTimer(local, element.getName());
+                }
+                
+                double yOff = (element instanceof IntermediateCatchEvent) ? 100 : 15;
+                double size = (element instanceof IntermediateCatchEvent) ? 36 : 50;
+                BpmndiGenerator.createShape(local, plane, logicNode, currentX - 50, currentY + yOff, size, size);
+                injectedNodes.put(element.getId(), logicNode);
+                currentX += 100;
+            }
+        }
+
+        Set<String> nodesWithOutgoing = new HashSet<>();
+        for (SequenceFlow gFlow : globalProcess.getChildElementsByType(SequenceFlow.class)) {
+            String srcId = gFlow.getSource().getId();
+            String tgtId = gFlow.getTarget().getId();
+            
+            if (injectedNodes.containsKey(srcId) && injectedNodes.containsKey(tgtId)) {
+                connect(local, plane, injectedNodes.get(srcId), injectedNodes.get(tgtId), gFlow.getName());
+                nodesWithOutgoing.add(srcId);
+            }
+        }
+
+        if (!injectedNodes.isEmpty()) {
+            FlowNode firstNode = injectedNodes.values().iterator().next();
+            connect(local, plane, anchor, firstNode, "");
+
+            if (nextLocal != null) {
+                for (Map.Entry<String, FlowNode> entry : injectedNodes.entrySet()) {
+                    if (!nodesWithOutgoing.contains(entry.getKey())) {
+                        connect(local, plane, entry.getValue(), nextLocal, "");
+                    }
+                }
+                shiftRight(local, nextLocal, currentX);
+            }
+        }
+    }
+
+    // --- Dynamic Helper Methods ---
+
+    // DYNAMIC MATCHING: Reads the Global Task ID and matches it with the Semantic Ontology Message Name
+    private InteractionMatch findMatchForGlobalTask(Task globalTask, List<InteractionMatch> matches) {
+        String taskId = globalTask.getId().toLowerCase();
+        for (InteractionMatch m : matches) {
+            if (taskId.contains(m.getMessageName().toLowerCase())) {
+                return m;
+            }
         }
         return null;
     }
 
-    private void injectParallelGateway(BpmnModelInstance model, BpmnPlane plane, String taskId, List<InteractionMatch> matches) {
-        ServiceTask source = model.getModelElementById(taskId);
-        if (source == null) return;
-
-        ParallelGateway fork = model.newInstance(ParallelGateway.class);
-        fork.setId("Fork_" + java.util.UUID.randomUUID().toString().replace("-", ""));
-        source.getParentElement().addChildElement(fork);
-
-        double sourceX = getX(model, source);
-        double sourceY = getY(model, source);
-
-        BpmndiGenerator.createShape(model, plane, fork, sourceX + 150, sourceY + 15, 50, 50);
-        reconnect(model, plane, source, fork);
-
-        double startY = sourceY - (matches.size() * 50);
-        for (int i = 0; i < matches.size(); i++) {
-            InteractionMatch m = matches.get(i);
-            SendTask send = model.newInstance(SendTask.class);
-            send.setId("Send_" + java.util.UUID.randomUUID().toString().replace("-", ""));
-            send.setName("Invia: " + m.getMessageName());
-            fork.getParentElement().addChildElement(send);
-
-            BpmndiGenerator.createShape(model, plane, send, sourceX + 300, startY + (i * 100), 100, 80);
-            connect(model, plane, fork, send);
-        }
+    private String cleanName(String name) {
+        return name.replace(".bpmn", "").replace("Part_", "").replace("_enhanced", "");
     }
 
-    private void injectSingleTask(BpmnModelInstance model, BpmnPlane plane, String taskId, String msg, boolean isSender) {
-        ServiceTask task = model.getModelElementById(taskId);
-        if (task == null) {
-            logger.error(" [Error] Task ID '{}' not found in BPMN model!", taskId);
-            return;
-        }
+    private boolean isComplexChoreography(List<InteractionMatch> matches) {
+        return matches.size() >= 3;
+    }
 
-        Task interaction = isSender ? model.newInstance(SendTask.class) : model.newInstance(ReceiveTask.class);
-        interaction.setId((isSender ? "Send_" : "Receive_") + java.util.UUID.randomUUID().toString().replace("-", ""));
-        interaction.setName((isSender ? "Invia: " : "Ricevi: ") + msg);
-        task.getParentElement().addChildElement(interaction);
+    private <T extends FlowNode> T createTask(BpmnModelInstance model, Class<T> clazz, String name) {
+        T task = model.newInstance(clazz);
+        task.setId(clazz.getSimpleName() + "_" + UUID.randomUUID().toString().substring(0,8));
+        task.setName(name);
+        model.getModelElementsByType(org.camunda.bpm.model.bpmn.instance.Process.class).iterator().next().addChildElement(task);
+        return task;
+    }
 
-        double x = getX(model, task);
-        double y = getY(model, task);
+    private <T extends Gateway> T createGateway(BpmnModelInstance model, Class<T> clazz, String name) {
+        T gw = model.newInstance(clazz);
+        gw.setId(clazz.getSimpleName() + "_" + UUID.randomUUID().toString().substring(0,8));
+        if (name != null) gw.setName(name);
+        model.getModelElementsByType(org.camunda.bpm.model.bpmn.instance.Process.class).iterator().next().addChildElement(gw);
+        return gw;
+    }
 
-        BpmndiGenerator.createShape(model, plane, interaction, isSender ? x + 150 : x - 150, y, 100, 80);
+    private IntermediateCatchEvent createTimer(BpmnModelInstance model, String name) {
+        IntermediateCatchEvent timer = model.newInstance(IntermediateCatchEvent.class);
+        timer.setId("Event_Timer_" + UUID.randomUUID().toString().substring(0,8));
+        if (name != null) timer.setName(name);
+        TimerEventDefinition def = model.newInstance(TimerEventDefinition.class);
+        timer.getEventDefinitions().add(def);
+        model.getModelElementsByType(org.camunda.bpm.model.bpmn.instance.Process.class).iterator().next().addChildElement(timer);
+        return timer;
+    }
 
-        if (isSender) reconnect(model, plane, task, interaction); 
-        else reconnectReceiver(model, plane, task, interaction);
+    private void connect(BpmnModelInstance model, BpmnPlane plane, FlowNode from, FlowNode to, String name) {
+        SequenceFlow flow = model.newInstance(SequenceFlow.class);
+        flow.setId("Flow_" + UUID.randomUUID().toString().substring(0,8));
+        flow.setSource(from);
+        flow.setTarget(to);
+        if (name != null && !name.isEmpty()) flow.setName(name);
+        from.getParentElement().addChildElement(flow);
+        
+        double w1 = from instanceof Gateway ? 50 : (from instanceof IntermediateCatchEvent ? 36 : 100);
+        double h1 = from instanceof Gateway ? 50 : (from instanceof IntermediateCatchEvent ? 36 : 80);
+        double w2 = to instanceof Gateway ? 50 : (to instanceof IntermediateCatchEvent ? 36 : 100);
+        double h2 = to instanceof Gateway ? 50 : (to instanceof IntermediateCatchEvent ? 36 : 80);
+        
+        BpmndiGenerator.createEdge(model, plane, flow, getX(model, from) + w1, getY(model, from) + (h1 / 2), getX(model, to), getY(model, to) + (h2 / 2));
+    }
+
+    private void shiftRight(BpmnModelInstance model, FlowNode node, double targetX) {
+        model.getModelElementsByType(BpmnShape.class).stream()
+             .filter(s -> node.equals(s.getBpmnElement()))
+             .findFirst()
+             .ifPresent(s -> s.getBounds().setX(Math.max(s.getBounds().getX(), targetX + 150)));
+    }
+
+    private double getX(BpmnModelInstance m, org.camunda.bpm.model.bpmn.instance.BaseElement e) {
+        return m.getModelElementsByType(BpmnShape.class).stream().filter(s -> e.equals(s.getBpmnElement())).map(s -> s.getBounds().getX()).findFirst().orElse(100.0);
+    }
+
+    private double getY(BpmnModelInstance m, org.camunda.bpm.model.bpmn.instance.BaseElement e) {
+        return m.getModelElementsByType(BpmnShape.class).stream().filter(s -> e.equals(s.getBpmnElement())).map(s -> s.getBounds().getY()).findFirst().orElse(100.0);
     }
 
     private BpmnPlane ensureDIInitialized(BpmnModelInstance model) {
-        BpmnPlane plane = model.getModelElementsByType(BpmnPlane.class).stream().findFirst().orElse(null);
-        if (plane == null) {
-            BpmnDiagram diagram = model.newInstance(BpmnDiagram.class);
-            plane = model.newInstance(BpmnPlane.class);
-            org.camunda.bpm.model.bpmn.instance.Process process = model.getModelElementsByType(org.camunda.bpm.model.bpmn.instance.Process.class).iterator().next();
-            plane.setBpmnElement(process);
-            diagram.setBpmnPlane(plane);
-            model.getDefinitions().addChildElement(diagram);
-        }
-        return plane;
-    }
-
-    private void reconnect(BpmnModelInstance model, BpmnPlane plane, FlowNode src, FlowNode trg) {
-        if (!src.getOutgoing().isEmpty()) {
-            SequenceFlow out = src.getOutgoing().iterator().next();
-            out.setSource(trg); 
-        }
-        connect(model, plane, src, trg);
-    }
-
-    private void reconnectReceiver(BpmnModelInstance model, BpmnPlane plane, FlowNode cons, FlowNode rec) {
-        if (!cons.getIncoming().isEmpty()) {
-            SequenceFlow in = cons.getIncoming().iterator().next();
-            in.setTarget(rec);
-        }
-        connect(model, plane, rec, cons);
-    }
-
-    private void connect(BpmnModelInstance model, BpmnPlane plane, FlowNode from, FlowNode to) {
-        SequenceFlow flow = model.newInstance(SequenceFlow.class);
-        flow.setId("Flow_Injected_" + java.util.UUID.randomUUID().toString().replace("-", ""));
-        flow.setSource(from);
-        flow.setTarget(to);
-        from.getParentElement().addChildElement(flow);
-
-        double w1 = from instanceof Gateway ? 50 : 100;
-        double h1 = from instanceof Gateway ? 50 : 80;
-        double w2 = to instanceof Gateway ? 50 : 100;
-        double h2 = to instanceof Gateway ? 50 : 80;
-
-        double startX = getX(model, from) + w1;      
-        double startY = getY(model, from) + (h1 / 2); 
-        double endX = getX(model, to);               
-        double endY = getY(model, to) + (h2 / 2);    
-
-        BpmndiGenerator.createEdge(model, plane, flow, startX, startY, endX, endY);
-    }
-
-    private double getX(BpmnModelInstance m, BaseElement e) {
-        return m.getModelElementsByType(BpmnShape.class).stream()
-             .filter(s -> e.equals(s.getBpmnElement()))
-             .map(s -> s.getBounds().getX()).findFirst().orElse(100.0);
-    }
-
-    private double getY(BpmnModelInstance m, BaseElement e) {
-        return m.getModelElementsByType(BpmnShape.class).stream()
-             .filter(s -> e.equals(s.getBpmnElement()))
-             .map(s -> s.getBounds().getY()).findFirst().orElse(100.0);
+        return model.getModelElementsByType(BpmnPlane.class).stream().findFirst().orElse(null);
     }
 }
